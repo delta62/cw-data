@@ -10,8 +10,15 @@ const SHORT_DATE_FMT: &str = "%a, %b %e, %Y";
 const LONG_DATE_FMT: &str = "%A, %B %e, %Y";
 
 lazy_static! {
-    static ref LAT_REGEX: Regex = Regex::new("^LA Times, (.*)$").unwrap();
-    static ref NYT_REGEX: Regex = Regex::new("^NY Times, (.*)$").unwrap();
+    static ref LAT_REGEX: Regex = Regex::new(r#"^LA Times, (\w+, \w+ \d+, \d{4})"#).unwrap();
+    static ref NYT_REGEX: Regex = Regex::new(r#"^NY Times, (\w+, \w+ \d+, \d{4})"#).unwrap();
+}
+
+#[derive(Debug)]
+pub struct RemotePuzzle {
+    pub date: NaiveDate,
+    pub puzzle: Puzzle,
+    pub source: PuzzleSource,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

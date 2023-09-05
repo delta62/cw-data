@@ -1,50 +1,60 @@
+mod client;
 mod db;
+mod error;
 mod puzzle;
+mod puzzle_loader;
 mod schema;
 
 use db::Database;
-use puzzle::{puzzle_date, puzzle_source};
-use reqwest::ClientBuilder;
-use schema::PuzzleList;
-use std::env;
+use error::{Error, Result};
+use puzzle::RemotePuzzle;
+use puzzle_loader::PuzzleLoader;
 
-const DFAC_URL: &str = "https://api.foracross.com/api/puzzle_list";
+macro_rules! var {
+    ($name:expr) => {
+        std::env::var($name)
+            .map_err(|_| crate::error::Error::Environment($name))
+            .unwrap()
+    };
+}
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
+    init();
+
+    if let Err(err) = try_run().await {
+        log::error!("{err}");
+    }
+}
+
+async fn try_run() -> Result<()> {
+    let db_path = var!("DB_PATH");
+    let db = Database::new(db_path);
+
+    db.init_schema().map_err(Error::Database)?;
+
+    let loader = PuzzleLoader::new();
+    let puzzles = loader.history_until(1_000).await?;
+
+    for RemotePuzzle {
+        puzzle,
+        date,
+        source,
+    } in puzzles
+    {
+        log::info!("Adding {source:?} - {date:?}");
+        db.upsert_puzzle(&puzzle, date, source)
+            .map_err(Error::Database)?;
+    }
+
+    Ok(())
+}
+
+fn init() {
     env_logger::init();
+    log::info!("Booting up");
 
     if dotenv::dotenv().is_err() {
         log::warn!("No .env file found; continuing with env variables");
     }
-
-    let db_path = env::var("DB_PATH").expect("DB_PATH not set");
-    let db = Database::new(db_path);
-    db.init_schema().unwrap();
-
-    let client = ClientBuilder::new().build().unwrap();
-    let res = client
-        .get(DFAC_URL)
-        .query(&[
-            ("page", "0"),
-            ("pageSize", "50"),
-            ("filter[nameOrTitleFilter]", ""),
-            ("filter[sizeFilter][Mini]", "false"),
-            ("filter[sizeFilter][Standard]", "true"),
-        ])
-        .send()
-        .await
-        .unwrap();
-
-    res.json::<PuzzleList>()
-        .await
-        .unwrap()
-        .iter()
-        .filter_map(|puzzle| {
-            puzzle_source(puzzle)
-                .and_then(|source| puzzle_date(puzzle, source).map(|date| (puzzle, date, source)))
-        })
-        .for_each(|(puzzle, date, source)| {
-            db.upsert_puzzle(puzzle, date, source).unwrap();
-        });
 }

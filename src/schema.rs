@@ -104,9 +104,12 @@ pub struct PuzzleList {
     puzzles: Vec<Puzzle>,
 }
 
-impl PuzzleList {
-    pub fn iter(&self) -> impl Iterator<Item = &Puzzle> {
-        self.puzzles.iter()
+impl IntoIterator for PuzzleList {
+    type Item = Puzzle;
+    type IntoIter = std::vec::IntoIter<Puzzle>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.puzzles.into_iter()
     }
 }
 
